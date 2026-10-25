@@ -1,0 +1,3 @@
+# Our extra checks for ModelOpt, in pre-commit format. They run after ModelOpt's own checks.
+# Add public hooks or local scripts here. Empty for now.
+repos: []
