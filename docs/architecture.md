@@ -7,7 +7,7 @@ Fork-only doc (`agent-main`). Upstream user docs are in `docs/source`.
 - Compress models for faster and smaller inference on NVIDIA GPUs, with a small loss of accuracy.
 - Techniques: quantization (PTQ, QAT, QAD), pruning and NAS, distillation, sparsity, speculative decoding draft models, PEFT.
 - Input: PyTorch models (Hugging Face, Megatron, NeMo, diffusers) or ONNX models.
-- Output: checkpoints for TensorRT-LLM, vLLM and SGLang (`modelopt/torch/export`), or Q/DQ ONNX for TensorRT (`modelopt/onnx`).
+- Output: unified Hugging Face checkpoints for TensorRT-LLM, vLLM and SGLang (`modelopt/torch/export`), or Q/DQ and mixed-precision ONNX for TensorRT (`modelopt/onnx`).
 - One mode system (`modelopt/torch/opt`) records each optimization so models can be saved, restored and stacked.
 - Ready recipes (`modelopt_recipes`) and end-to-end scripts (`examples`) for common models.
 
@@ -18,7 +18,7 @@ flowchart LR
     hf["Hugging Face / Megatron / NeMo / diffusers models"] --> mt["modelopt.torch"]
     onnxin["ONNX models"] --> mo["modelopt.onnx"]
     recipes["modelopt_recipes"] --> mt
-    mt -->|"HF / TRT-LLM checkpoints"| rt["TensorRT-LLM, vLLM, SGLang"]
+    mt -->|"unified HF checkpoints"| rt["TensorRT-LLM, vLLM, SGLang"]
     mt -->|"Q/DQ ONNX"| mo
     mo -->|".onnx with Q/DQ"| trt["TensorRT"]
     agents["plugins/modelopt (agent skills)"] -->|"drive workflows"| ex["examples"]
@@ -33,7 +33,7 @@ flowchart LR
 |-----------|---------|
 | `modelopt/torch/opt` | Mode system: `apply_mode`, save/restore, config base classes, searcher |
 | `modelopt/torch/quantization` | PyTorch quantization and calibration (see its `README.md`) |
-| `modelopt/torch/export` | Export quantized models to Hugging Face, TensorRT-LLM and Megatron checkpoints |
+| `modelopt/torch/export` | Export quantized HF, diffusers and Megatron models to unified HF checkpoints; deprecated TensorRT-LLM checkpoint export in `trtllm/` (see its `README.md`) |
 | `modelopt/torch/nas`, `modelopt/torch/prune` | NAS and pruning |
 | `modelopt/torch/puzzletron` | Puzzletron architecture search and compression |
 | `modelopt/torch/distill` | Knowledge distillation |
@@ -41,13 +41,13 @@ flowchart LR
 | `modelopt/torch/speculative` | Speculative decoding draft models (EAGLE, Medusa, and others) |
 | `modelopt/torch/peft` | LoRA and other PEFT methods |
 | `modelopt/torch/fastgen` | Diffusion step-distillation losses |
-| `modelopt/torch/kernels` | CUDA and Triton kernels for quantization and sparsity |
+| `modelopt/torch/kernels` | CUDA and Triton kernels for quantization and sparsity (see its `README.md`) |
 | `modelopt/torch/models` | Per-model descriptors for Hugging Face model types |
 | `modelopt/torch/trace` | Layer dependency analysis |
 | `modelopt/torch/_deploy` | Benchmark models and convert them to device binaries |
 | `modelopt/torch/utils` | Shared utilities, plugin import helpers |
 | `modelopt/onnx/quantization` | ONNX PTQ to Q/DQ ONNX (see its `README.md`) |
-| `modelopt/onnx/autocast` | Convert FP32 ONNX to mixed precision |
+| `modelopt/onnx/autocast` | Convert FP32 ONNX to FP16/BF16 mixed precision (see its `README.md`) |
 | `modelopt/onnx/graph_surgery`, `modelopt/onnx/export` | ONNX graph post-processing and export helpers |
 | `modelopt/deploy` | LLM generation helpers for deployment |
 | `modelopt/recipe`, `modelopt_recipes` | Recipe loader and YAML recipes for models and formats |
