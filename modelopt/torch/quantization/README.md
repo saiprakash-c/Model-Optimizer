@@ -52,7 +52,7 @@ flowchart LR
 | `extensions.py` | Build and load CUDA extensions (`precompile()`) |
 | `plugins/` | Quantized module types for third-party libraries |
 | `utils/` | Shared helpers: calibration, numeric, layerwise (GPTQ Hessian memory headroom, batch-size probe), shared inputs (shared ranges for MLA fused down-projection) |
-| `plugins/accelerate.py` | Accelerate CPU-offload support: quantizer state moves on and off the GPU with the weights |
+| `modelopt/torch/quantization/plugins/accelerate.py` | Accelerate CPU-offload support: quantizer state moves on and off the GPU with the weights |
 
 ## Intra: interaction between components
 
