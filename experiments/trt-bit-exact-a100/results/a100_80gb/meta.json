@@ -1,0 +1,69 @@
+{
+  "tag": "a100_80gb",
+  "gpu": "NVIDIA A100-SXM4-80GB, 81920 MiB, 595.91.07, GPU-12f0d03e-64f0-35ea-664f-9aedc4043308",
+  "tensorrt": "10.7.0",
+  "engines": {
+    "dinov2_vitb14_fp16": {
+      "engine_sha256": "3b260cf272cfbe6871e0b04581eabb3a65011023eb9120dadffe18fda87a574f",
+      "output_sha256_per_run": [
+        "b6fc2e9428fc1367fc7c41fdd959c992dd8059310a70c11c241ed4ed320bbb5c",
+        "b6fc2e9428fc1367fc7c41fdd959c992dd8059310a70c11c241ed4ed320bbb5c",
+        "b6fc2e9428fc1367fc7c41fdd959c992dd8059310a70c11c241ed4ed320bbb5c",
+        "b6fc2e9428fc1367fc7c41fdd959c992dd8059310a70c11c241ed4ed320bbb5c",
+        "b6fc2e9428fc1367fc7c41fdd959c992dd8059310a70c11c241ed4ed320bbb5c"
+      ],
+      "dtype": "float32",
+      "shape": [
+        8,
+        257,
+        768
+      ]
+    },
+    "dinov2_vitb14_fp32": {
+      "engine_sha256": "b38f905a12b66b9c2ffa9c68c20100712efa92f3f4b90433a430fb8d35545879",
+      "output_sha256_per_run": [
+        "4ad83bf53bbfbfdf16104ad21533c63496156956dc745955399bef0ede402a35",
+        "4ad83bf53bbfbfdf16104ad21533c63496156956dc745955399bef0ede402a35",
+        "4ad83bf53bbfbfdf16104ad21533c63496156956dc745955399bef0ede402a35",
+        "4ad83bf53bbfbfdf16104ad21533c63496156956dc745955399bef0ede402a35",
+        "4ad83bf53bbfbfdf16104ad21533c63496156956dc745955399bef0ede402a35"
+      ],
+      "dtype": "float32",
+      "shape": [
+        8,
+        257,
+        768
+      ]
+    },
+    "resnet50_fp16": {
+      "engine_sha256": "dbc888d9d2ccbee026b412b681cfee4ada7f843a840caa7a7d04e363d0dfd7de",
+      "output_sha256_per_run": [
+        "8f97ddff758186d9cec5f57d8db456e481317be05bebf432ee7073ce8e8ce514",
+        "8f97ddff758186d9cec5f57d8db456e481317be05bebf432ee7073ce8e8ce514",
+        "8f97ddff758186d9cec5f57d8db456e481317be05bebf432ee7073ce8e8ce514",
+        "8f97ddff758186d9cec5f57d8db456e481317be05bebf432ee7073ce8e8ce514",
+        "8f97ddff758186d9cec5f57d8db456e481317be05bebf432ee7073ce8e8ce514"
+      ],
+      "dtype": "float32",
+      "shape": [
+        8,
+        1000
+      ]
+    },
+    "resnet50_fp32": {
+      "engine_sha256": "4b5eb89321293dec5993f41e8abdd406cef141eab70769093bd7338a74df5730",
+      "output_sha256_per_run": [
+        "e4b8caa89450d9ebe52f6903b4bf27ae09d0755db18d4f88b3d502fdb6f1e4ce",
+        "e4b8caa89450d9ebe52f6903b4bf27ae09d0755db18d4f88b3d502fdb6f1e4ce",
+        "e4b8caa89450d9ebe52f6903b4bf27ae09d0755db18d4f88b3d502fdb6f1e4ce",
+        "e4b8caa89450d9ebe52f6903b4bf27ae09d0755db18d4f88b3d502fdb6f1e4ce",
+        "e4b8caa89450d9ebe52f6903b4bf27ae09d0755db18d4f88b3d502fdb6f1e4ce"
+      ],
+      "dtype": "float32",
+      "shape": [
+        8,
+        1000
+      ]
+    }
+  }
+}
