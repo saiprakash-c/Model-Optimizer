@@ -9,7 +9,7 @@ ONNX post-training quantization (PTQ): takes an ONNX model without Q/DQ nodes an
 - Calibrate activations with ONNX Runtime (`entropy` or `max`, optional per-node calibration) on CPU, CUDA or TensorRT execution providers.
 - Convert non-quantized parts to the runtime precision (`fp16` or `bf16`).
 - Support custom TensorRT plugins, DLA targets and dynamic input shape profiles.
-- Optional autotune: measure Q/DQ placements with TensorRT and keep the fastest per region pattern.
+- Optional autotune: measure Q/DQ placements with TensorRT and keep the fastest per region pattern. Without `timing_cache_file`, the TensorRT timing cache goes to a private temporary directory per process (`default_timing_cache_file()` in `autotune/benchmark.py`), not a shared `/tmp` path.
 - CLI: `python -m modelopt.onnx.quantization` and `python -m modelopt.onnx.quantization.autotune`.
 
 ## Inter: interaction with other systems
@@ -46,7 +46,7 @@ flowchart LR
 | `precision_utils.py` | Convert non-quantized parts to `fp16` / `bf16` |
 | `quant_utils.py` | Shared quantization math and helpers |
 | `gs_patching.py` | `onnx_graphsurgeon` patch to set dtypes |
-| `extensions.py`, `src/` | C++ extension for round-and-pack of INT4 weights |
+| `extensions.py`, `src/` | C++ extension for round-and-pack of INT4 weights; falls back to Python packing when the build fails (for example, no C++ compiler) |
 | `autotune/` | Pattern-based Q/DQ autotuning with TensorRT benchmarks |
 
 ## Intra: interaction between components
@@ -84,6 +84,7 @@ sequenceDiagram
 | `tests/gpu/onnx/quantization/test_quantize_fp8.py` | FP8 quantization on GPU |
 | `tests/gpu/onnx/quantization/test_plugin.py` | Models with custom TensorRT plugins |
 | `tests/gpu/onnx/quantization/test_autotune_quantization_integration.py` | Autotune with TensorRT |
+| `tests/unit/onnx/quantization/test_extensions.py` | INT4 packing falls back to Python when the extension build fails |
 | `tests/examples/test_onnx_ptq.sh` | `examples/onnx_ptq` PTQ flow |
 
 On Thor (aarch64), tests that need CUDA or TensorRT execution providers fail (see `.fork/known_failures.md`).

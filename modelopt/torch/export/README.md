@@ -41,7 +41,7 @@ flowchart LR
 | `registry.py` | `ExportModuleRegistry`, `PrepareMoEInputsRegistry`, `ExportContext`: dispatch per-module export logic |
 | `hf_export_handlers.py` | Built-in handlers registered in `registry.py` (quantized linear, fused and MoE experts) |
 | `quant_utils.py` | Scaling factors, quantization format of a module, weight packing (`to_quantized_weight()`), `postprocess_state_dict()` |
-| `quantized_weight_export.py` | Functional export of quantized weight tensors and the HF quantization config |
+| `quantized_weight_export.py` | Functional export of quantized weight tensors, KV-cache scales (`get_kv_cache_export_spec()`, `capture_kv_cache_export_state()`) and the HF quantization config |
 | `quant_aware_conversion.py` | Quantization-aware reverse weight conversion (model layout back to HF layout) |
 | `quant_format.py` | Quantization and KV-cache format names |
 | `layer_utils.py` | Module-shape predicates and MoE quantizer helpers |
@@ -90,10 +90,10 @@ sequenceDiagram
 |------|----------------|
 | `tests/unit/torch/export/test_unified_export_hf.py` | HF export on small models, CPU |
 | `tests/unit/torch/export/test_export_registry.py` | Handler dispatch and precedence |
-| `tests/unit/torch/export/test_quantized_weight_state.py` | Functional weight export state |
+| `tests/unit/torch/export/test_quantized_weight_state.py` | Functional weight and KV-cache export state |
 | `tests/unit/torch/export/test_quant_aware_conversion.py` | Reverse weight conversion |
 | `tests/gpu/torch/export/test_unified_hf_export_and_check_safetensors.py` | Exported safetensors per format |
-| `tests/gpu/torch/export/test_offload_export.py`, `test_fsdp2_export.py` | Streaming export for offloaded and FSDP2 models |
+| `tests/gpu/torch/export/test_offload_export.py`, `test_fsdp2_export.py` | Streaming export for offloaded (including NVFP4) and FSDP2 models |
 | `tests/gpu/torch/export/test_layerwise_export.py` | Per-layer export during calibration |
 | `tests/gpu/torch/export/test_export_carry_over.py` | Unloaded source weights carried into the checkpoint |
 | `tests/gpu/torch/export/test_export_diffusers.py` | Diffusers export |

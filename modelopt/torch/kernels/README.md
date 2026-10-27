@@ -38,7 +38,7 @@ flowchart LR
 | `common/attention/decode_attention.py` | Split-K decode attention for the paged NVFP4 serving path |
 | `quantization/common/fp8_quant.py`, `nvfp4_quant.py` | Composable Triton JIT functions for FP8 (E4M3) and NVFP4 (E2M1) fake quant |
 | `quantization/gemm/tensor_quant*.cu`, `tensor_quant.cpp`, `tensor_quant*.h` | CUDA fake-quant extensions (INT, FP8, MX) |
-| `quantization/gemm/fp4_kernel.py`, `fp4_kernel_hopper.py` | NVFP4 fake-quant Triton kernels (Hopper+ variant needs SM 8.9+) |
+| `quantization/gemm/fp4_kernel.py`, `fp4_kernel_hopper.py` | NVFP4 fake-quant Triton kernels (Hopper+ variant needs SM 8.9+); static blockwise kernel tiles 64 blocks per program with int64 offsets, so tensors above 2^31 elements (stacked MoE experts) work |
 | `quantization/gemm/fp8_kernel.py` | FP8 Triton kernels |
 | `quantization/gemm/nvfp4_fp8_sweep.py`, `_fp8_scale_candidates.py` | Fused NVFP4 weight-MSE FP8 scale sweep and its candidate set |
 | `quantization/gemm/gptq_fused_kernel.py` | Fused GPTQ blockwise weight update |

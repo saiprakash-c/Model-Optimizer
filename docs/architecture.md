@@ -6,9 +6,10 @@ Fork-only doc (`agent-main`). Upstream user docs are in `docs/source`.
 
 - Compress models for faster and smaller inference on NVIDIA GPUs, with a small loss of accuracy.
 - Techniques: quantization (PTQ, QAT, QAD), pruning and NAS, distillation, sparsity, speculative decoding draft models, PEFT.
-- Input: PyTorch models (Hugging Face, Megatron, NeMo, diffusers) or ONNX models.
+- Input: PyTorch models (Hugging Face, Megatron, NeMo, diffusers) or ONNX models. Needs Python 3.11 or newer.
 - Output: unified Hugging Face checkpoints for TensorRT-LLM, vLLM and SGLang (`modelopt/torch/export`), or Q/DQ and mixed-precision ONNX for TensorRT (`modelopt/onnx`).
 - One mode system (`modelopt/torch/opt`) records each optimization so models can be saved, restored and stacked.
+- Scale to large models: calibration and `auto_quantize` (weights and KV cache) run under DP/FSDP2 and CPU offload, and export streams one layer at a time.
 - Ready recipes (`modelopt_recipes`) and end-to-end scripts (`examples`) for common models.
 
 ## Inter: interaction with other systems
@@ -48,14 +49,15 @@ flowchart LR
 | `modelopt/torch/utils` | Shared utilities, plugin import helpers |
 | `modelopt/onnx/quantization` | ONNX PTQ to Q/DQ ONNX (see its `README.md`) |
 | `modelopt/onnx/autocast` | Convert FP32 ONNX to FP16/BF16 mixed precision (see its `README.md`) |
-| `modelopt/onnx/graph_surgery`, `modelopt/onnx/export` | ONNX graph post-processing and export helpers |
+| `modelopt/onnx/export` | Per-format weight exporters (INT4, NVFP4, MXFP8, FP8) that fold Q/DQ into low-bit ONNX weights, called by `modelopt/torch/_deploy` (see its `README.md`) |
+| `modelopt/onnx/graph_surgery` | ONNX graph rewrites (GQA replacement, encoder cross-attention KV, DQ transpose) |
 | `modelopt/deploy` | LLM generation helpers for deployment |
 | `modelopt/recipe`, `modelopt_recipes` | Recipe loader and YAML recipes for models and formats |
 | `examples` | End-to-end scripts (for example `examples/hf_ptq`, `examples/onnx_ptq`, `examples/llm_qat`) |
 | `plugins/modelopt` | Installable agent plugin: skills and agents |
 | `tools` | CI, launcher, debugger, MCP, pre-commit helpers |
 | `experimental` | Experimental features not in the main package |
-| `tests` | `unit` (CPU), `gpu*` (GPU and framework-specific), `examples`, `regression` |
+| `tests` | `unit` (CPU, offline, see `tests/unit/README.md`), `gpu` (see `tests/gpu/README.md`), `gpu_megatron`, `gpu_trtllm`, `gpu_vllm`, `examples`, `regression` |
 | `.fork` | Fork-only notes for agents (branches, known failures on Thor) |
 
 ## Intra: interaction between components
@@ -90,6 +92,8 @@ sequenceDiagram
 | `tests/examples/llm_distill` | Distillation example |
 | `tests/examples/speculative_decoding` | Draft model training example |
 | `tests/gpu/torch/quantization/test_quantize_cuda.py` | Quantization with CUDA kernels |
+| `tests/gpu/torch/quantization/test_fsdp2_autoquant.py` | Weight and KV-cache `auto_quantize` under FSDP2 with checkpoint resume |
+| `tests/gpu/torch/quantization/test_onnx_export_cuda.py` | Quantized PyTorch model to ONNX with low-bit weights (`modelopt/onnx/export`) |
 | `tests/unit/onnx/quantization/test_quantize_api.py` | ONNX quantization API |
 | `tests/regression` | Regression tests |
 
