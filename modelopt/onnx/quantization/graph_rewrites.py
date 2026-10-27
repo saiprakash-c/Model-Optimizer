@@ -265,6 +265,9 @@ def remove_redundant_cast_nodes(graph: onnx.GraphProto) -> None:
     value_info_map = {info.name: info for info in graph.value_info}
     cast_indices = []
     output_names = {output.name for output in graph.output}
+    initializer_readers = {
+        name: len(tensor_consumers.get(name, [])) + (name in output_names) for name in initializers
+    }
 
     def _get_tensor_type(tensor_name: str) -> int | None:
         """Get the tensor type for a given tensor name."""
@@ -300,6 +303,14 @@ def remove_redundant_cast_nodes(graph: onnx.GraphProto) -> None:
             cast_indices.append(node_idx)
             cast_input = onnx.numpy_helper.to_array(initializers[input_name])
             dtype = onnx.helper.tensor_dtype_to_np_dtype(attr.i)
+            # Retyping a shared initializer in place breaks its other readers, so the
+            # converted copy takes the Cast output name and consumers need no rewiring.
+            if initializer_readers[input_name] > 1:
+                initializer_readers[input_name] -= 1
+                graph.initializer.append(
+                    onnx.numpy_helper.from_array(cast_input.astype(dtype), node.output[0])
+                )
+                continue
             converted_tensor = onnx.numpy_helper.from_array(cast_input.astype(dtype), input_name)
             initializers[input_name].CopyFrom(converted_tensor)
         else:
