@@ -80,6 +80,7 @@ sequenceDiagram
 | `tests/unit/onnx/quantization/test_quantize_api.py` | `quantize()` API across modes and options |
 | `tests/unit/onnx/quantization/test_quantize_int8.py` | INT8 Q/DQ placement on sample graphs |
 | `tests/unit/onnx/quantization/test_quantize_zint4.py` | INT4 weight-only quantization |
+| `tests/unit/onnx/quantization/test_graph_indexing.py` | Path matching does not keep graph nodes between calls |
 | `tests/unit/onnx/quantization/test_calibrated_quantization.py` | Calibration with data end to end |
 | `tests/gpu/onnx/quantization/test_quantize_fp8.py` | FP8 quantization on GPU |
 | `tests/gpu/onnx/quantization/test_plugin.py` | Models with custom TensorRT plugins |

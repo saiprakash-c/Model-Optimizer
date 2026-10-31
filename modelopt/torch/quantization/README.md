@@ -8,7 +8,9 @@ PyTorch post-training quantization (PTQ) and quantization-aware training (QAT).
 - Apply a quantization config (`quant_cfg` list of wildcard entries + `algorithm`) to those quantizers.
 - Calibrate scales (`amax`) with a forward loop: max, MSE, local Hessian, SmoothQuant, AWQ, SVDQuant, GPTQ, imatrix, LSQ.
 - Search a per-layer format mix under a size or cost limit (`auto_quantize`), and a KV-cache format mix; both searches run under DP/FSDP2 and resume from per-rank checkpoints.
-- Keep calibration correct when distributed or offloaded: synchronize `amax` across data-parallel ranks, and move quantizer state with weights under accelerate CPU offload.
+- Keep calibration correct when distributed or offloaded: synchronize `amax` across data-parallel ranks, move quantizer state with weights under accelerate CPU offload, gather only FSDP2's own parameters in its weight-access window, and refuse what would give wrong shards (AWQ on a sharded FSDP2 model, compressing W4A8 `SequentialQuantizer` weights).
+- Calibrate and fake-quantize Hugging Face fused MoE experts on their fast paths (`grouped_mm`, `torch_a2a`, expert-parallel ranks calibrate their own experts; NVFP4 experts in one kernel launch).
+- Reuse fake-quantized weights across the micro-batches of one QAT / QAD optimizer step (`weight_cache_scope()`).
 - Simulate formats (fake quant) for INT8, INT4, FP8, NVFP4, MXFP4/MXFP8, NF4 and GGML formats; compress weights to real low-bit tensors.
 - Save and restore the quantized state through the `modelopt.torch.opt` mode system (`mto.save` / `mto.restore`).
 - Support third-party module types (Hugging Face, Megatron, Transformer Engine, vLLM, PEFT, and others) through plugins.
@@ -52,6 +54,7 @@ flowchart LR
 | `extensions.py` | Build and load CUDA extensions (`precompile()`) |
 | `plugins/` | Quantized module types for third-party libraries |
 | `utils/` | Shared helpers: calibration, numeric, layerwise (GPTQ Hessian memory headroom, batch-size probe), shared inputs (shared ranges for MLA fused down-projection) |
+| `utils/weight_cache.py` | Fake-quantized weight cache for QAT / QAD (`weight_cache_scope()`, `enable_weight_cache()`, `invalidate_weight_cache()`), used by `TensorQuantizer` |
 | `modelopt/torch/quantization/plugins/accelerate.py` | Accelerate CPU-offload support: quantizer state moves on and off the GPU with the weights |
 
 ## Intra: interaction between components
@@ -85,6 +88,9 @@ sequenceDiagram
 | `tests/gpu/torch/quantization/test_quantize_cuda.py` | End-to-end `quantize` with CUDA kernels |
 | `tests/unit/torch/quantization/test_autoquant.py` | `auto_quantize` search and config output |
 | `tests/unit/torch/quantization/test_calib.py` | Calibration algorithms (max, SmoothQuant, AWQ) |
+| `tests/unit/torch/quantization/test_weight_cache.py` | Cached fake-quant weights: hits, invalidation, gradient |
+| `tests/unit/torch/quantization/plugins/test_fused_experts.py`, `tests/gpu/torch/quantization/plugins/test_fused_experts_cuda.py` | HF fused MoE experts: quantize and calibrate under `grouped_mm` and expert parallelism |
+| `tests/unit/torch/quantization/test_compress.py` | Compress refuses `SequentialQuantizer` (W4A8) weights |
 | `tests/gpu/torch/quantization/test_real_quantize_cuda.py` | Compress to real quantized weights and run inference |
 | `tests/gpu/torch/quantization/test_fsdp2.py` | Quantization with FSDP2-sharded models |
 | `tests/gpu/torch/quantization/test_fsdp2_autoquant.py` | Weight, KV-only and composed `auto_quantize` under FSDP2, with checkpoint resume (needs 2 GPUs) |

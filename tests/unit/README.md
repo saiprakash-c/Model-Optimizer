@@ -33,6 +33,7 @@ flowchart LR
 | Component | Purpose |
 |-----------|---------|
 | `conftest.py` | Force Hugging Face offline mode; `cpu_dist_workers` fixture (two Gloo ranks shared by the session) |
+| `torch/conftest.py` | `gloo_world_of_one` fixture: a one-rank Gloo process group and CPU device mesh, so code takes its distributed path |
 | `torch/` | Tests per `modelopt/torch` subpackage (`quantization`, `export`, `opt`, `kernels`, `nas`, `prune`, `puzzletron`, `sparsity`, `speculative`, `distill`, `fastgen`, `deploy`, `trace`, `utils`, `models`) |
 | `onnx/` | ONNX quantization, autocast, graph surgery, Dynamo adapter, partitioning, ONNX utils |
 | `recipe/` | Recipe loader, presets and per-model recipe checks |
@@ -68,6 +69,9 @@ sequenceDiagram
 | `tests/unit/torch/quantization/test_dist.py` | `amax` sync under data-parallel calibration (Gloo) |
 | `tests/unit/torch/quantization/test_kv_cache_auto_quant_distributed.py` | Distributed KV-cache search and checkpoint resume |
 | `tests/unit/torch/export/test_unified_export_hf.py` | HF checkpoint export on small models |
+| `tests/unit/torch/export/test_distributed_writer.py` | No-gather distributed writer pieces on a CPU process group |
+| `tests/unit/torch/utils/test_meta_dcp_load.py` | Loading a checkpoint into a meta-initialized model through DCP |
+| `tests/unit/torch/models/test_remote_code.py` | Staging a checkpoint's remote code and keeping a patch on it |
 | `tests/unit/torch/opt/test_chaining.py` | Stacking modes and save/restore |
 | `tests/unit/onnx/quantization/test_quantize_api.py` | ONNX `quantize()` API across modes |
 | `tests/unit/onnx/autocast/test_autocast.py` | ONNX FP16/BF16 autocast |

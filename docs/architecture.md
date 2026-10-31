@@ -6,10 +6,10 @@ Fork-only doc (`agent-main`). Upstream user docs are in `docs/source`.
 
 - Compress models for faster and smaller inference on NVIDIA GPUs, with a small loss of accuracy.
 - Techniques: quantization (PTQ, QAT, QAD), pruning and NAS, distillation, sparsity, speculative decoding draft models, PEFT.
-- Input: PyTorch models (Hugging Face, Megatron, NeMo, diffusers) or ONNX models. Needs Python 3.11 or newer.
+- Input: PyTorch models (Hugging Face, Megatron, NeMo, diffusers) or ONNX models. Needs Python 3.11 and PyTorch 2.10 or newer.
 - Output: unified Hugging Face checkpoints for TensorRT-LLM, vLLM and SGLang (`modelopt/torch/export`), or Q/DQ and mixed-precision ONNX for TensorRT (`modelopt/onnx`).
 - One mode system (`modelopt/torch/opt`) records each optimization so models can be saved, restored and stacked.
-- Scale to large models: calibration and `auto_quantize` (weights and KV cache) run under DP/FSDP2 and CPU offload, and export streams one layer at a time.
+- Scale to large models: calibration and `auto_quantize` (weights and KV cache) run under DP/FSDP2, expert parallelism and CPU offload; export streams one layer at a time or packs FSDP2 shards in place.
 - Ready recipes (`modelopt_recipes`) and end-to-end scripts (`examples`) for common models.
 
 ## Inter: interaction with other systems
@@ -43,7 +43,7 @@ flowchart LR
 | `modelopt/torch/peft` | LoRA and other PEFT methods |
 | `modelopt/torch/fastgen` | Diffusion step-distillation losses |
 | `modelopt/torch/kernels` | CUDA and Triton kernels for quantization and sparsity (see its `README.md`) |
-| `modelopt/torch/models` | Per-model descriptors for Hugging Face model types |
+| `modelopt/torch/models` | Per-model descriptors and specs for Hugging Face model types; staging and patching of a checkpoint's remote code (`_remote_code.py`) |
 | `modelopt/torch/trace` | Layer dependency analysis |
 | `modelopt/torch/_deploy` | Benchmark models and convert them to device binaries |
 | `modelopt/torch/utils` | Shared utilities, plugin import helpers |

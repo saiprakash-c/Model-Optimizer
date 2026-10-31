@@ -8,6 +8,7 @@ Checkpoint export: writes a quantized (or pruned, or speculative-decoding) PyTor
 - Export Megatron Core GPT models to an HF checkpoint (`export_mcore_gpt_to_hf()`), and import HF weights into Megatron Core (`import_mcore_gpt_from_hf()`), with per-model name mappings in `modelopt/torch/export/plugins/mcore_*.py`.
 - Support the quantization formats of `modelopt.torch.quantization` (FP8, NVFP4, MXFP4/MXFP8, INT4 AWQ, INT8, W4A8, GGML/IQ formats and others; names in `quant_format.py`).
 - Export large models in bounded memory: streaming export for offloaded and FSDP2-sharded models (`unified_export_hf_streaming.py`), and per-layer shards written during calibration (`layerwise_export.py`).
+- Prepare a no-gather distributed export for FSDP2 models: handlers can pack each FSDP2 unit inside its weight-update window and keep fused MoE experts fused and sharded (`ExportContext.keep_fused_experts`); `distributed_writer.py` holds the writer pieces (not yet called by `export_hf_checkpoint()`).
 - Copy the source weights the model did not load (for example MTP heads) and non-weight files, so the checkpoint is the complete model.
 - Export vLLM fake-quant checkpoints (HF and Megatron) and speculative-decoding draft models (EAGLE, DFlash) in their official formats.
 - Keep the deprecated TensorRT-LLM checkpoint export in `trtllm/` (`export_tensorrt_llm_checkpoint()`, removal planned in 0.49.0).
@@ -38,14 +39,15 @@ flowchart LR
 | `unified_export_hf_streaming.py` | Streaming export for offloaded and FSDP2 models: one layer at a time, then name shards and write the index |
 | `layerwise_export.py` | `LayerwiseExporter`: write each decoder layer's shard as soon as it is calibrated, `finalize()` writes the rest |
 | `unified_export_megatron.py` | `GPTModelExporter`, `export_mcore_gpt_to_hf()`, `import_mcore_gpt_from_hf()` |
-| `registry.py` | `ExportModuleRegistry`, `PrepareMoEInputsRegistry`, `ExportContext`: dispatch per-module export logic |
-| `hf_export_handlers.py` | Built-in handlers registered in `registry.py` (quantized linear, fused and MoE experts) |
+| `registry.py` | `ExportModuleRegistry`, `PrepareMoEInputsRegistry`, `ExportContext` (dtype, `keep_fused_experts`, held FSDP2 weight window): dispatch per-module export logic |
+| `hf_export_handlers.py` | Built-in handlers registered in `registry.py` (quantized linear, fused and MoE experts); `held_fsdp2_weight_windows()` packs an FSDP2 unit's modules in one weight-update window |
 | `quant_utils.py` | Scaling factors, quantization format of a module, weight packing (`to_quantized_weight()`), `postprocess_state_dict()` |
 | `quantized_weight_export.py` | Functional export of quantized weight tensors, KV-cache scales (`get_kv_cache_export_spec()`, `capture_kv_cache_export_state()`) and the HF quantization config |
 | `quant_aware_conversion.py` | Quantization-aware reverse weight conversion (model layout back to HF layout) |
 | `quant_format.py` | Quantization and KV-cache format names |
 | `layer_utils.py` | Module-shape predicates and MoE quantizer helpers |
-| `moe_utils.py` | MoE export helpers |
+| `moe_utils.py` | MoE export: fold quantizers into fused experts and split them per expert, or keep them fused and sharded (`_export_fused_experts_keep_fused()`, `split_fused_experts_state_dict()`), expert token-count table |
+| `distributed_writer.py` | Pieces of a no-gather distributed HF writer: each tensor goes to one owner rank by point-to-point sends, shards are balanced by bytes; not yet wired into `export_hf_checkpoint()` |
 | `model_utils.py` | Model type detection |
 | `convert_hf_config.py` | Convert the ModelOpt quant config to the llm-compressor format |
 | `shard_cast_utils.py` | Shared primitives for streaming casts and shard writing |
@@ -92,6 +94,8 @@ sequenceDiagram
 | `tests/unit/torch/export/test_export_registry.py` | Handler dispatch and precedence |
 | `tests/unit/torch/export/test_quantized_weight_state.py` | Functional weight and KV-cache export state |
 | `tests/unit/torch/export/test_quant_aware_conversion.py` | Reverse weight conversion |
+| `tests/unit/torch/export/test_fused_experts_keep_fused.py` | Fused MoE experts folded and kept fused, then split per expert |
+| `tests/unit/torch/export/test_distributed_writer.py`, `test_sharded_weight_packing.py` | No-gather writer pieces and packing of sharded weights (CPU process group) |
 | `tests/gpu/torch/export/test_unified_hf_export_and_check_safetensors.py` | Exported safetensors per format |
 | `tests/gpu/torch/export/test_offload_export.py`, `test_fsdp2_export.py` | Streaming export for offloaded (including NVFP4) and FSDP2 models |
 | `tests/gpu/torch/export/test_layerwise_export.py` | Per-layer export during calibration |

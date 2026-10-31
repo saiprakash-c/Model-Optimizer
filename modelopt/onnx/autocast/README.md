@@ -77,7 +77,7 @@ sequenceDiagram
 | `tests/unit/onnx/autocast/test_autocast.py` | `convert_to_mixed_precision()` end to end on sample models |
 | `tests/unit/onnx/autocast/test_graphsanitizer.py` | Graph cleaning (LayerNorm fusion, opset, casts) |
 | `tests/unit/onnx/autocast/test_nodeclassifier.py` | Each classification rule |
-| `tests/unit/onnx/autocast/test_precisionconverter.py` | Cast insertion and type changes, `keep_io_types` |
+| `tests/unit/onnx/autocast/test_precisionconverter.py` | Cast insertion and type changes, `keep_io_types`; plugin lists and skip rules are not shared between converter instances |
 | `tests/unit/onnx/autocast/test_referencerunner.py` | Reference run with random and file data |
 | `tests/unit/onnx/test_autocast_quantize.py` | AutoCast together with ONNX quantization |
 
