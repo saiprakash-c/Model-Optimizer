@@ -245,6 +245,28 @@ def test_real_quantize_linear(
             assert isinstance(module.weight, QTensorWrapper)
 
 
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_nvfp4_dtype_cast_keeps_real_quant_scales(dtype):
+    """Casting a compressed NVFP4 model keeps its block and global scales and its outputs."""
+    model = torch.nn.Sequential(torch.nn.Linear(256, 256)).to("cuda", dtype)
+    x = torch.randn(8, 256, device="cuda", dtype=dtype)
+    mtq.quantize(model, mtq.NVFP4_DEFAULT_CFG, lambda m: m(x))
+    mtq.compress(model)
+    weight_quantizer = model[0].weight_quantizer
+    scales = {k: getattr(weight_quantizer, k).clone() for k in ("_scale", "_double_scale")}
+    with torch.no_grad():
+        expected = model(x)
+
+    # The model's own dtype, so only the quantizer scales can change.
+    model.to(dtype=dtype)
+
+    for key, scale in scales.items():
+        assert getattr(weight_quantizer, key).dtype == scale.dtype
+        assert torch.equal(getattr(weight_quantizer, key), scale), key
+    with torch.no_grad():
+        assert torch.equal(model(x), expected)
+
+
 def _test_mtq_compress_fsdp_module(
     rank, size, model_cls=SimpleLinear, quant_config=mtq.NVFP4_DEFAULT_CFG
 ):

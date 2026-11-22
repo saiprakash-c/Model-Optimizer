@@ -61,6 +61,9 @@ from ..functional import normalized_hadamard_transform
 # the smallest positive subnormal value representable by the 3-bit mantissa.
 _FP8_E4M3_MIN_POSITIVE = torch.finfo(torch.float8_e4m3fn).smallest_normal / (2**3)
 
+# Buffers ``_real_quantize`` stores the scales of a compressed weight in.
+_REAL_QUANT_SCALE_BUFFERS = ("_scale", "_double_scale", "_scale_zeros")
+
 __all__ = [
     "GroupedQuantizer",
     "HardDisabledTensorQuantizer",
@@ -1550,23 +1553,28 @@ class TensorQuantizer(nn.Module):
             self.register_buffer(key, value)
 
     def _apply(self, fn, recurse=True):
-        """Apply module transforms without rounding a pinned GGML payload's importance.
+        """Apply module transforms without changing the dtype of state a cast would corrupt.
 
-        A pinned payload is re-encoded under the importance its search was weighted with, and only
-        that exact importance encodes the weight the payload came from to the payload again. Casting
-        a model, as ``model.bfloat16()`` or Megatron's ``Float16Module`` do, moves it but keeps it
-        float32.
+        Casting a model, as ``model.to(dtype=...)``, ``model.bfloat16()`` or Megatron's
+        ``Float16Module`` do, moves these buffers but keeps their dtype:
+
+        - The real-quant scales of a compressed weight. The packed weight was quantized against
+          their exact values, so rounding them changes the dequantized weight.
+        - A pinned GGML payload's importance. A pinned payload is re-encoded under the importance
+          its search was weighted with, and only that exact importance encodes the weight the
+          payload came from to the payload again.
         """
         # Imported here: ggml/__init__ imports its backend, which imports this module.
         from ...ggml.common import PINNED_IMPORTANCE_PREFIX
 
-        importance = {
+        kept_dtype = {
             key: value
             for key, value in self._buffers.items()
-            if key.startswith(PINNED_IMPORTANCE_PREFIX) and value is not None
+            if value is not None
+            and (key in _REAL_QUANT_SCALE_BUFFERS or key.startswith(PINNED_IMPORTANCE_PREFIX))
         }
         module = super()._apply(fn, recurse=recurse)
-        for key, value in importance.items():
+        for key, value in kept_dtype.items():
             if self._buffers[key].dtype != value.dtype:
                 self._buffers[key] = value.to(self._buffers[key].device)
         return module

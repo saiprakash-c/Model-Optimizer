@@ -91,9 +91,6 @@ with torch.no_grad(), torch.autocast("cuda", dtype=torch.float16):
     )
 ```
 
-For an NVFP4 `--real-quant` checkpoint, use `.to("cuda")` without `dtype`:
-casting its FP8 block scales to fp16 changes the dequantized weights.
-
 `torch_tensorrt.compile(ir="dynamo")` cannot capture the whole rollout, quantized
 or not: `generate()` and the vision tower branch on tensor values, so export
 fails with `GuardOnDataDependentSymNode`. Compiling smaller pieces and running
