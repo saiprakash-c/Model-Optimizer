@@ -6,9 +6,12 @@ AutoCast: converts an FP32 ONNX model to mixed precision (FP16 or BF16). Nodes t
 
 - Convert an FP32 ONNX model to `fp16` or `bf16` mixed precision (`convert_to_mixed_precision()`).
 - Keep risky nodes in FP32 by rules: node-name regex, op type, initializer range (`init_max`), I/O value range from a reference run (`data_max`), depth of reduction, or a custom `NodeRuleBase` rule.
+- Always keep the variance chain of a decomposed RMSNorm or LayerNorm (`x*x` or `Pow 2` -> `ReduceMean` -> `Add` -> `Sqrt`) in FP32, because `x*x` overflows FP16 when `|x|` is more than about 256 (`NormVarianceRule`). `nodes_to_include` can move such nodes back to low precision.
 - Force nodes into low precision by node-name regex or op type (include rules).
-- Run the model with ONNX Runtime (CPU, CUDA or TensorRT execution providers) to get reference I/O ranges, with random or user calibration data.
-- Clean the graph before conversion: opset upgrade (default minimum 13 for `fp16`, 22 for `bf16`), LayerNorm pattern fusion, shared-constant duplication, custom-op handling, FP64 to FP32.
+- Run the model with ONNX Runtime (CPU, CUDA or TensorRT execution providers) to get reference I/O ranges, with random or user calibration data. Batches stream one at a time into running `TensorStats`, so peak memory does not grow with the number of batches.
+- Optional per-node calibration (`calibrate_per_node`, CLI `--calibrate_per_node`): run each node as its own one-node model and keep only live activations, for lower peak memory and a longer run.
+- Add the `trt` execution provider only when TensorRT introspection confirms a custom TensorRT plugin. Without TensorRT Python bindings, the introspection is skipped and the selected providers stay.
+- Clean the graph before conversion: opset upgrade (default minimum 13 for `fp16`, 22 for `bf16`), LayerNorm pattern fusion, shared-constant duplication, custom-op handling, FP64 to FP32 (finite FP64 values outside the FP32 range are clamped to the FP32 maximum, not cast to infinity).
 - Insert `Cast` nodes at precision borders and optionally keep the network I/O types (`keep_io_types`).
 - Give a light conversion path for other ModelOpt flows (`convert_to_f16()`): a fixed op block list, no node classifier, no reference run.
 - CLI: `python -m modelopt.onnx.autocast`.
@@ -36,9 +39,9 @@ flowchart LR
 |-----------|---------|
 | `convert.py` | Public API: `convert_to_mixed_precision()` (full flow) and `convert_to_f16()` (block-list flow, used by other modules) |
 | `__main__.py` | CLI for `convert_to_mixed_precision()` |
-| `graphsanitizer.py` | `GraphSanitizer`: opset and IR version, LayerNorm fusion, shared constants, custom ops, I/O casts, FP64 to FP32 |
-| `nodeclassifier.py` | `NodeClassifier` and rules (`DisabledNodeNameRegexRule`, `DisabledOpTypes`, `InitializerRangeRule`, `IORangeRule`, `DepthOfReductionRule`, include rules): split nodes into low and high precision |
-| `referencerunner.py` | `ReferenceRunner`: run the model with ONNX Runtime and collect output tensors or `TensorStats` |
+| `graphsanitizer.py` | `GraphSanitizer`: opset and IR version, LayerNorm fusion, shared constants, custom ops and confirmed TensorRT plugin ops (`trt_plugin_ops`), I/O casts, FP64 to FP32 with clamping |
+| `nodeclassifier.py` | `NodeClassifier` and rules (`DisabledNodeNameRegexRule`, `DisabledOpTypes`, `InitializerRangeRule`, `IORangeRule`, `DepthOfReductionRule`, `NormVarianceRule`, include rules): split nodes into low and high precision |
+| `referencerunner.py` | `ReferenceRunner`: run the model with ONNX Runtime and collect output tensors or `TensorStats`; streams batches in the whole-graph run, and runs one node at a time when `calibrate_per_node` is set |
 | `precisionconverter.py` | `PrecisionConverter`: change initializers and value types, insert and clean up `Cast` nodes |
 | `utils.py` | Graph mappings, subgraph walk, type and shape clearing, ops not supported in low precision |
 | `logging_config.py` | `configure_logging()` for the AutoCast logger |
@@ -58,7 +61,7 @@ sequenceDiagram
     S-->>C: clean model, custom ops
     C->>C: infer types, load external data, setup_mappings
     opt data_max set or custom ops found
-        C->>R: run(calibration_data)
+        C->>R: run(calibration_data, calibrate_per_node)
         R-->>C: reference outputs
     end
     C->>N: run(reference outputs)
@@ -76,9 +79,9 @@ sequenceDiagram
 |------|----------------|
 | `tests/unit/onnx/autocast/test_autocast.py` | `convert_to_mixed_precision()` end to end on sample models |
 | `tests/unit/onnx/autocast/test_graphsanitizer.py` | Graph cleaning (LayerNorm fusion, opset, casts) |
-| `tests/unit/onnx/autocast/test_nodeclassifier.py` | Each classification rule |
+| `tests/unit/onnx/autocast/test_nodeclassifier.py` | Each classification rule, including the norm variance chain kept in FP32 with random reference data |
 | `tests/unit/onnx/autocast/test_precisionconverter.py` | Cast insertion and type changes, `keep_io_types`; plugin lists and skip rules are not shared between converter instances |
-| `tests/unit/onnx/autocast/test_referencerunner.py` | Reference run with random and file data |
+| `tests/unit/onnx/autocast/test_referencerunner.py` | Reference run with random and file data, whole-graph and per-node; multi-batch runs do not keep earlier batches and a NaN first batch does not poison the stats |
 | `tests/unit/onnx/test_autocast_quantize.py` | AutoCast together with ONNX quantization |
 
 User guide: `docs/source/guides/8_autocast.rst`.

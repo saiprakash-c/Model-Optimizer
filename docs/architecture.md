@@ -9,7 +9,8 @@ Fork-only doc (`agent-main`). Upstream user docs are in `docs/source`.
 - Input: PyTorch models (Hugging Face, Megatron, NeMo, diffusers) or ONNX models. Needs Python 3.11 and PyTorch 2.10 or newer.
 - Output: unified Hugging Face checkpoints for TensorRT-LLM, vLLM and SGLang (`modelopt/torch/export`), or Q/DQ and mixed-precision ONNX for TensorRT (`modelopt/onnx`).
 - One mode system (`modelopt/torch/opt`) records each optimization so models can be saved, restored and stacked.
-- Scale to large models: calibration and `auto_quantize` (weights and KV cache) run under DP/FSDP2, expert parallelism and CPU offload; export streams one layer at a time or packs FSDP2 shards in place.
+- One reader for every `MODELOPT_*` environment variable (`modelopt/env.py`); the `check-env-knobs` pre-commit hook refuses reads elsewhere under `modelopt/`.
+- Scale to large models: calibration (on per-rank data) and `auto_quantize` (weights and KV cache, optionally in parallel format shards) run under DP/FSDP2, expert parallelism and CPU offload; export streams one layer at a time, or writes a sharded model without gathering it (every expert-parallel model, FSDP2 on request).
 - Ready recipes (`modelopt_recipes`) and end-to-end scripts (`examples`) for common models.
 
 ## Inter: interaction with other systems
@@ -38,15 +39,16 @@ flowchart LR
 | `modelopt/torch/nas`, `modelopt/torch/prune` | NAS and pruning |
 | `modelopt/torch/puzzletron` | Puzzletron architecture search and compression |
 | `modelopt/torch/distill` | Knowledge distillation |
-| `modelopt/torch/sparsity` | Weight and attention sparsity |
-| `modelopt/torch/speculative` | Speculative decoding draft models (EAGLE, Medusa, and others) |
+| `modelopt/torch/sparsity` | Weight and attention sparsity, both through one entry point `mts.sparsify` (`sparsification.py`) |
+| `modelopt/torch/speculative` | Speculative decoding draft models (EAGLE, DFlash, MTP, Medusa, and others) and their losses (`losses.py`) |
 | `modelopt/torch/peft` | LoRA and other PEFT methods |
 | `modelopt/torch/fastgen` | Diffusion step-distillation losses |
 | `modelopt/torch/kernels` | CUDA and Triton kernels for quantization and sparsity (see its `README.md`) |
-| `modelopt/torch/models` | Per-model descriptors and specs for Hugging Face model types; staging and patching of a checkpoint's remote code (`_remote_code.py`) |
+| `modelopt/torch/models` | Per-model descriptors and specs for Hugging Face model types, including the named-model PTQ code moved out of the HF quantization plugin (for example T5, BART, Whisper, Kimi, Nemotron VL); staging and patching of a checkpoint's remote code (`_remote_code.py`) |
 | `modelopt/torch/trace` | Layer dependency analysis |
 | `modelopt/torch/_deploy` | Benchmark models and convert them to device binaries |
-| `modelopt/torch/utils` | Shared utilities, plugin import helpers |
+| `modelopt/torch/utils` | Shared utilities, plugin import helpers, distribution plan and FSDP2 helpers (`fsdp2_utils.py`) |
+| `modelopt/env.py` | Accessors for every `MODELOPT_*` environment variable (standard library only) |
 | `modelopt/onnx/quantization` | ONNX PTQ to Q/DQ ONNX (see its `README.md`) |
 | `modelopt/onnx/autocast` | Convert FP32 ONNX to FP16/BF16 mixed precision (see its `README.md`) |
 | `modelopt/onnx/export` | Per-format weight exporters (INT4, NVFP4, MXFP8, FP8) that fold Q/DQ into low-bit ONNX weights, called by `modelopt/torch/_deploy` (see its `README.md`) |
@@ -93,6 +95,7 @@ sequenceDiagram
 | `tests/examples/speculative_decoding` | Draft model training example |
 | `tests/gpu/torch/quantization/test_quantize_cuda.py` | Quantization with CUDA kernels |
 | `tests/gpu/torch/quantization/test_fsdp2_autoquant.py` | Weight and KV-cache `auto_quantize` under FSDP2 with checkpoint resume |
+| `tests/gpu/torch/export/test_distributed_hf_export.py` | No-gather HF export of FSDP2 and expert-parallel models |
 | `tests/gpu/torch/quantization/test_onnx_export_cuda.py` | Quantized PyTorch model to ONNX with low-bit weights (`modelopt/onnx/export`) |
 | `tests/unit/onnx/quantization/test_quantize_api.py` | ONNX quantization API |
 | `tests/regression` | Regression tests |

@@ -8,6 +8,7 @@ Fast, CPU-only, offline tests for the core ModelOpt library. CI runs the whole f
 - Run hermetic: `tests/unit/conftest.py` sets `HF_HUB_OFFLINE`, `HF_DATASETS_OFFLINE` and `TRANSFORMERS_OFFLINE`; tests build tiny models and tokenizers locally (`tests/_test_utils`).
 - Give multi-rank CPU coverage (DP sync, distributed search) through two persistent Gloo ranks (`cpu_dist_workers` fixture), not a spawn per test.
 - Check example helper code and recipes (YAML files in `modelopt_recipes`) that need no GPU.
+- Check the docs and CI wiring that need no GPU: README parsing and README command flags against real script help (`doc_tests/`), example CI routing, and the `MODELOPT_*` environment-variable reader (`modelopt/env.py`) with its pre-commit check.
 - Apply a default per-test timeout of 120 s (`_DEFAULT_TIMEOUT` in `tests/conftest.py`); `manual` and `nightly` tests are skipped unless `--run-manual` / `--run-nightly` is given.
 
 ## Inter: interaction with other systems
@@ -37,9 +38,12 @@ flowchart LR
 | `torch/` | Tests per `modelopt/torch` subpackage (`quantization`, `export`, `opt`, `kernels`, `nas`, `prune`, `puzzletron`, `sparsity`, `speculative`, `distill`, `fastgen`, `deploy`, `trace`, `utils`, `models`) |
 | `onnx/` | ONNX quantization, autocast, graph surgery, Dynamo adapter, partitioning, ONNX utils |
 | `recipe/` | Recipe loader, presets and per-model recipe checks |
-| `examples/` | CPU checks of example scripts (diffusers FP4, Kimi-K3, DeepSeek-V4 recipe, speculative decoding entry point) |
+| `examples/` | CPU checks of example scripts (diffusers FP4, Kimi-K3, DeepSeek-V4 recipe, speculative decoding entry point, ONNX GenAI LLM calibration, selective full-rank fake-quant training) |
+| `doc_tests/` | README parsing, failure locations and subprocess cleanup (`test_markdown.py`); README flags against script help, without running the commands (`test_cli.py`) |
 | `deploy/` | `modelopt/deploy` smoke test |
-| `tools/` | `tools` helpers (resource monitor) |
+| `tools/` | `tools` helpers (resource monitor) and `tools/precommit/check_env_knobs.py` (`tools/precommit/`) |
+| `test_env.py` | `modelopt/env.py`: parsing of `MODELOPT_*` environment variables |
+| `test_example_tests_workflow.py` | Example CI routing, without GPU runners |
 | `test_example_run_command.py`, `test_diffusers_example_runner.py` | Example command builders and runners |
 
 ## Intra: interaction between components
@@ -70,6 +74,7 @@ sequenceDiagram
 | `tests/unit/torch/quantization/test_kv_cache_auto_quant_distributed.py` | Distributed KV-cache search and checkpoint resume |
 | `tests/unit/torch/export/test_unified_export_hf.py` | HF checkpoint export on small models |
 | `tests/unit/torch/export/test_distributed_writer.py` | No-gather distributed writer pieces on a CPU process group |
+| `tests/unit/torch/utils/test_distributed_calibration.py` | Calibration of a distributed model on per-rank data, and refusal of rank-local calibrations |
 | `tests/unit/torch/utils/test_meta_dcp_load.py` | Loading a checkpoint into a meta-initialized model through DCP |
 | `tests/unit/torch/models/test_remote_code.py` | Staging a checkpoint's remote code and keeping a patch on it |
 | `tests/unit/torch/opt/test_chaining.py` | Stacking modes and save/restore |

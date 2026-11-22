@@ -4,12 +4,14 @@ ONNX post-training quantization (PTQ): takes an ONNX model without Q/DQ nodes an
 
 ## Purpose
 
-- Quantize ONNX models to INT8, FP8 (calibrated Q/DQ) or INT4 (weight-only: RTN, AWQ clip, AWQ lite).
+- Quantize ONNX models to INT8, FP8 (calibrated Q/DQ) or INT4 (weight-only: RTN, AWQ clip, AWQ lite). INT4 RTN Q/DQ nodes carry `axis` and `block_size` attributes.
+- Optional for per-node AWQ (`awqlite_reuse_activations`, default off): adjacent weights that share one input use one captured activation, so calibration inference does not run again for each weight.
 - Place Q/DQ nodes where TensorRT can fuse them: partition the graph into fusible regions and skip non-quantizable patterns.
 - Calibrate activations with ONNX Runtime (`entropy` or `max`, optional per-node calibration) on CPU, CUDA or TensorRT execution providers.
 - Convert non-quantized parts to the runtime precision (`fp16` or `bf16`).
 - Support custom TensorRT plugins, DLA targets and dynamic input shape profiles.
-- Optional autotune: measure Q/DQ placements with TensorRT and keep the fastest per region pattern. Without `timing_cache_file`, the TensorRT timing cache goes to a private temporary directory per process (`default_timing_cache_file()` in `autotune/benchmark.py`), not a shared `/tmp` path.
+- Write graphs back through `modelopt.onnx.utils.export_onnx`, so models with initializers over 2 GiB export.
+- Optional autotune: measure Q/DQ placements with TensorRT and keep the fastest per region pattern. Without `timing_cache_file`, the TensorRT timing cache goes to a private temporary directory per process (`default_timing_cache_file()` in `autotune/benchmark.py`), not a shared `/tmp` path. For remote benchmarks, `autotune_remote_model_path` (CLI `--autotune_remote_model_path`, or `--remote_model_path` for the autotune CLI) sets the engine path on the remote device; by default it is a unique file name.
 - CLI: `python -m modelopt.onnx.quantization` and `python -m modelopt.onnx.quantization.autotune`.
 
 ## Inter: interaction with other systems
@@ -36,8 +38,8 @@ flowchart LR
 | `partitioning.py` | Find fusible and non-quantizable partitions for Q/DQ placement |
 | `graph_selection.py` | Select nodes to quantize or exclude; runtime probes |
 | `graph_indexing.py` | Graph indexing and pattern matching |
-| `graph_rewrites.py` | Shared graph rewrites (cast custom ops, remove redundant casts) |
-| `qdq_graph.py`, `qdq_utils.py` | Q/DQ placement policy and Q/DQ node helpers |
+| `graph_rewrites.py` | Shared graph rewrites (cast custom ops, remove redundant casts, remove all initializer outputs) |
+| `qdq_graph.py`, `qdq_utils.py` | Q/DQ placement policy and Q/DQ node helpers; `qdq_to_dq` stores INT8 or UINT8 weights to match the zero-point type |
 | `operators.py` | Extra and changed QDQ operators on top of ONNX Runtime |
 | `ort_quantization.py` | Static Q/DQ quantization built on ONNX Runtime |
 | `ort_calibration.py`, `ort_calibration_per_node.py`, `ort_patches.py` | ONNX Runtime calibration patches |
@@ -45,7 +47,7 @@ flowchart LR
 | `calib_utils.py` | Calibration data readers and helpers |
 | `precision_utils.py` | Convert non-quantized parts to `fp16` / `bf16` |
 | `quant_utils.py` | Shared quantization math and helpers |
-| `gs_patching.py` | `onnx_graphsurgeon` patch to set dtypes |
+| `gs_patching.py` | `onnx_graphsurgeon` patch to set dtypes, including sequence and optional value types |
 | `extensions.py`, `src/` | C++ extension for round-and-pack of INT4 weights; falls back to Python packing when the build fails (for example, no C++ compiler) |
 | `autotune/` | Pattern-based Q/DQ autotuning with TensorRT benchmarks |
 
@@ -81,6 +83,8 @@ sequenceDiagram
 | `tests/unit/onnx/quantization/test_quantize_int8.py` | INT8 Q/DQ placement on sample graphs |
 | `tests/unit/onnx/quantization/test_quantize_zint4.py` | INT4 weight-only quantization |
 | `tests/unit/onnx/quantization/test_graph_indexing.py` | Path matching does not keep graph nodes between calls |
+| `tests/unit/onnx/quantization/test_graph_rewrites.py` | `remove_output_initializers` removes every initializer output, also adjacent ones |
+| `tests/unit/onnx/quantization/test_qdq_utils.py` | Q/DQ helpers and Q/DQ to DQ weight conversion |
 | `tests/unit/onnx/quantization/test_calibrated_quantization.py` | Calibration with data end to end |
 | `tests/gpu/onnx/quantization/test_quantize_fp8.py` | FP8 quantization on GPU |
 | `tests/gpu/onnx/quantization/test_plugin.py` | Models with custom TensorRT plugins |

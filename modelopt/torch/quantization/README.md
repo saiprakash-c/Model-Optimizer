@@ -6,11 +6,12 @@ PyTorch post-training quantization (PTQ) and quantization-aware training (QAT).
 
 - Replace supported `nn.Module`s with quantized versions that hold `TensorQuantizer`s for inputs, weights and outputs.
 - Apply a quantization config (`quant_cfg` list of wildcard entries + `algorithm`) to those quantizers.
-- Calibrate scales (`amax`) with a forward loop: max, MSE, local Hessian, SmoothQuant, AWQ, SVDQuant, GPTQ, imatrix, LSQ.
-- Search a per-layer format mix under a size or cost limit (`auto_quantize`), and a KV-cache format mix; both searches run under DP/FSDP2 and resume from per-rank checkpoints.
-- Keep calibration correct when distributed or offloaded: synchronize `amax` across data-parallel ranks, move quantizer state with weights under accelerate CPU offload, gather only FSDP2's own parameters in its weight-access window, and refuse what would give wrong shards (AWQ on a sharded FSDP2 model, compressing W4A8 `SequentialQuantizer` weights).
+- Calibrate scales (`amax`) with a forward loop: max, MSE, local Hessian, SmoothQuant, AWQ, SVDQuant, GPTQ, imatrix, LSQ. GPTQ uses the fused NVFP4 update by default. GGML IQ formats calibrate with `local_hessian` (local scales picked by each group's local Hessian) and derive their super-block scale from the data.
+- Search a per-layer format mix under a size or cost limit (`auto_quantize`), and a KV-cache format mix; both searches run under DP/FSDP2 and resume from per-rank checkpoints. `auto_quantize` can calibrate and score its formats in parallel shards (`format_shard`, then `merge_auto_quantize_checkpoints()`), scores KL candidates in a low-bit context, and finalizes the selection with sequential layerwise calibration.
+- Keep calibration correct when distributed or offloaded: calibrate a distributed model on per-rank data and refuse, before any change, an algorithm that keeps its statistics on the rank; synchronize `amax` across data-parallel ranks and Megatron-Core `TELinear` parallel groups, move quantizer state with weights under accelerate CPU offload, gather only FSDP2's own parameters in its weight-access window, and refuse what would give wrong shards (AWQ on a sharded FSDP2 model, compressing W4A8 `SequentialQuantizer` weights).
 - Calibrate and fake-quantize Hugging Face fused MoE experts on their fast paths (`grouped_mm`, `torch_a2a`, expert-parallel ranks calibrate their own experts; NVFP4 experts in one kernel launch).
 - Reuse fake-quantized weights across the micro-batches of one QAT / QAD optimizer step (`weight_cache_scope()`).
+- Prepare QAD: `initialize_qdq_weights()` sets the latent weights to their fake-quantized values before an uncompressed checkpoint is saved; GGML IQ PTQ keeps the scales and importance that GPTQ chose, and GGML weights are re-encoded after each optimizer step. `enable_quant_input_gradients()` (in `lora.py`) turns on activation gradients as a restorable mode.
 - Simulate formats (fake quant) for INT8, INT4, FP8, NVFP4, MXFP4/MXFP8, NF4 and GGML formats; compress weights to real low-bit tensors.
 - Save and restore the quantized state through the `modelopt.torch.opt` mode system (`mto.save` / `mto.restore`).
 - Support third-party module types (Hugging Face, Megatron, Transformer Engine, vLLM, PEFT, and others) through plugins.
@@ -33,9 +34,9 @@ flowchart LR
 
 | Component | Purpose |
 |-----------|---------|
-| `model_quant.py` | Public API: `quantize`, `calibrate`, `auto_quantize`, `enable_quantizer`, `disable_quantizer`, `fold_weight`, `print_quant_summary` |
+| `model_quant.py` | Public API: `quantize`, `calibrate`, `auto_quantize`, `merge_auto_quantize_checkpoints`, `initialize_qdq_weights`, `enable_quantizer`, `disable_quantizer`, `fold_weight`, `print_quant_summary`; refuses rank-local calibrations on a distributed model |
 | `config.py` | `QuantizeConfig`, quantizer attribute configs, algorithm configs, built-in format presets |
-| `mode.py` | Mode descriptors for `quantize`, `real_quantize`, `quantize_export`, `auto_quantize` and one calibration mode per algorithm |
+| `mode.py` | Mode descriptors for `quantize`, `real_quantize`, `quantize_export`, `auto_quantize`, `quant_input_gradients` and one calibration mode per algorithm; each calibration mode names its rank-local parts |
 | `conversion.py` | Module replacement through `QuantModuleRegistry`, apply `quant_cfg` to quantizers, restore quantizer state |
 | `model_calib.py` | Calibration algorithms (max, MSE, local Hessian, SmoothQuant, AWQ, SVDQuant, GPTQ, imatrix, LSQ, layerwise); `amax` sync across DP/EP ranks |
 | `algorithms.py`, `_auto_quantize_cost.py`, `_auto_quantize_shapley.py` | `auto_quantize` search: candidate formats, cost model, sensitivity scores |
@@ -47,9 +48,10 @@ flowchart LR
 | `qtensor/` | Real quantized tensor types (INT4, INT8, FP8, NVFP4, MXFP4, MXFP8, NF4) |
 | `compress.py` | Convert fake-quant weights to real `qtensor` storage |
 | `backends/` | Real low-bit GEMM registry (FP8 per-tensor, NVFP4) |
-| `ggml/` | GGML formats (Q8_0, IQ1/IQ2 codebooks), GPTQ and imatrix for GGML |
+| `ggml/` | GGML formats (Q8_0, IQ1/IQ2 codebooks), GPTQ, imatrix and `local_hessian` (`local_hessian.py`, `choice_search.py`) for GGML; native IQ scale fields (`scale_fields.py`) and fixed IQ sub-block candidates for GSQ refinement (`gsq_candidates.py`) |
 | `linear_attention/` | Helpers for linear-attention modules |
-| `lora.py` | LoRA adapters on quantized models |
+| `lora.py` | LoRA adapters on quantized models (`enable_quant_lora`, `has_quant_lora`, `merge_quant_lora`) and `enable_quant_input_gradients` |
+| `repair_formats.py` | `IQScaleState`: differentiable native IQ scale fields; codes and additive bits stay fixed |
 | `export_onnx.py`, `_dynamo_onnx.py` | Q/DQ symbolic functions for ONNX export |
 | `extensions.py` | Build and load CUDA extensions (`precompile()`) |
 | `plugins/` | Quantized module types for third-party libraries |
@@ -87,6 +89,9 @@ sequenceDiagram
 | `tests/unit/torch/quantization/test_quantize_cpu.py` | End-to-end `quantize` with built-in configs on CPU; module training mode restored after calibration |
 | `tests/gpu/torch/quantization/test_quantize_cuda.py` | End-to-end `quantize` with CUDA kernels |
 | `tests/unit/torch/quantization/test_autoquant.py` | `auto_quantize` search and config output |
+| `tests/unit/torch/quantization/test_model_quant.py` | `initialize_qdq_weights()` keeps quantizer state, undoes pre-scales and rotations, and refuses bad input before any change |
+| `tests/unit/torch/quantization/test_iq_formats.py`, `test_ggml_imatrix.py`, `test_gsq_candidates.py`, `test_repair_formats.py` | GGML IQ encoders and calibration, GSQ candidates, differentiable IQ scale fields |
+| `tests/unit/torch/utils/test_distributed_calibration.py` | Calibration of a distributed model on per-rank data, and the refusal of rank-local calibrations (CPU process group) |
 | `tests/unit/torch/quantization/test_calib.py` | Calibration algorithms (max, SmoothQuant, AWQ) |
 | `tests/unit/torch/quantization/test_weight_cache.py` | Cached fake-quant weights: hits, invalidation, gradient |
 | `tests/unit/torch/quantization/plugins/test_fused_experts.py`, `tests/gpu/torch/quantization/plugins/test_fused_experts_cuda.py` | HF fused MoE experts: quantize and calibrate under `grouped_mm` and expert parallelism |

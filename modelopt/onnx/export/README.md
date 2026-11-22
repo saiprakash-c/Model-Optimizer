@@ -16,7 +16,7 @@ ONNX weight exporters: after a quantized PyTorch model is exported to ONNX with 
 flowchart LR
     deploy["modelopt/torch/_deploy/utils/torch_onnx.py (quantize_weights, get_onnx_bytes_and_metadata)"]:::int -->|"process_model(onnx_model) per format"| ex["modelopt/onnx/export"]:::own
     ex -->|"graph indexing, Q/DQ dtype map, quant math"| oq["modelopt/onnx/quantization"]:::int
-    ex -->|"shared ONNX helpers, logger"| ou["modelopt/onnx (utils.py, logging_config.py)"]:::int
+    ex -->|"export_onnx (safe for initializers over 2 GiB), logger"| ou["modelopt/onnx (utils.py, logging_config.py)"]:::int
     ex -->|"graph edits"| gs["onnx, onnx_graphsurgeon, numpy, torch"]:::ext
     ex -->|".onnx with low-bit weights"| trt["TensorRT"]:::ext
     classDef own fill:#d4edda,stroke:#2e7d32,color:#000
@@ -33,7 +33,7 @@ flowchart LR
 | `int4_exporter.py` | `INT4QuantExporter`: blockwise INT4 weight scales and packing |
 | `nvfp4_exporter.py` | `NVFP4QuantExporter`: replace the FP4 Q/DQ with two DQ nodes (FP8 block scale, then FP4 weight) and cast weights to `FLOAT4E2M1` |
 | `mxfp8_exporter.py` | `MXFP8QuantExporter`: E8M0 block scales and FP8 weights |
-| `fp8_exporter.py` | `FP8QuantExporter`: fold weight Q/DQ to DQ only, plus FP8 graph rewrites for TensorRT fusion |
+| `fp8_exporter.py` | `FP8QuantExporter`: fold weight Q/DQ to DQ only, plus FP8 graph rewrites for TensorRT fusion; writes the graph back with `modelopt.onnx.utils.export_onnx`, so initializers over 2 GiB do not break the export |
 | `int8_exporter.py` | `INT8QuantExporter`: placeholder, every step returns the model unchanged |
 | `_dynamo_adapter.py` | `normalize_dynamo_weight_paths()`: validate and normalize Dynamo-exported INT4/NVFP4 weight paths; not called by package code yet |
 | `__init__.py` | Public exports of the six exporter classes |
