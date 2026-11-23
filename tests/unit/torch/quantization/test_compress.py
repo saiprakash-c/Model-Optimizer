@@ -36,3 +36,29 @@ def test_compress_refuses_w4a8_weights_before_changing_the_model(grouped):
         mtq.compress(model)
 
     assert not is_real_quantized(model)
+
+
+@pytest.mark.parametrize(
+    "cast",
+    [
+        pytest.param(lambda m: m.to(dtype=torch.bfloat16), id="to_dtype"),
+        pytest.param(lambda m: m.half().bfloat16(), id="half_then_bfloat16"),
+    ],
+)
+def test_dtype_cast_keeps_real_quant_scales(cast):
+    """Casting a compressed model keeps its scales, so the dequantized weights do not change."""
+    model = nn.Sequential(nn.Linear(256, 256)).bfloat16()
+    x = torch.randn(8, 256, dtype=torch.bfloat16)
+    mtq.quantize(model, mtq.INT8_DEFAULT_CFG, lambda m: m(x))
+    mtq.compress(model)
+    weight_quantizer = model[0].weight_quantizer
+    scale = weight_quantizer._scale.clone()
+    with torch.no_grad():
+        expected = model(x)
+
+    cast(model)
+
+    assert weight_quantizer._scale.dtype == scale.dtype == torch.float32
+    assert torch.equal(weight_quantizer._scale, scale)
+    with torch.no_grad():
+        assert torch.equal(model(x), expected)

@@ -30,7 +30,7 @@ from .quant_module import (
     QuantModuleRegistry,
     _LegacyQuantLinearConvBaseMixin,
 )
-from .tensor_quantizer import TensorQuantizer
+from .tensor_quantizer import _REAL_QUANT_SCALE_BUFFERS, TensorQuantizer
 
 __all__ = ["Linear", "QuantLinear", "RealQuantLinear", "SVDQuantLinear"]
 
@@ -184,7 +184,7 @@ class SVDQuantLinear(QuantLinearConvBase):
 class RealQuantLinear(QuantModule):
     """Quantized version of nn.Linear with real quantization."""
 
-    list_of_scale_tensors = ["_scale", "_double_scale", "_scale_zeros"]
+    list_of_scale_tensors = list(_REAL_QUANT_SCALE_BUFFERS)
     allow_real_quant_gemm = True
 
     @property
